@@ -2,7 +2,7 @@ pharm-ai
 -----------
 pharm-ai is an open-source project focused on harnessing Artificial Intelligence and Machine Learning to address real-world challenges in the pharmaceutical and healthcare domains. This repository offers a modular framework for building, training, and deploying AI-driven solutions for drug discovery, molecular analysis, patient data analytics, and more.
 -----------------------------------------------------
-##Table of Contents :
+Table of Contents :
       Features
       Project Structure
       Getting Started
@@ -13,7 +13,7 @@ pharm-ai is an open-source project focused on harnessing Artificial Intelligence
       Contact
       Acknowledgements
 -----------
-##Features
+Features
 Multi-Modal Data Handling:
 Supports molecular structures, text, and clinical data.
 AI & ML Models:
@@ -25,7 +25,7 @@ Modular codebase for easy extension and integration with other tools.
 Educational Resources:
 Example notebooks and documentation to help users get started.
 ----------
-##Project Structure
+Project Structure
 pharm-ai/
 └── OneDrive/
     └── Desktop/
@@ -38,13 +38,13 @@ pharm-ai/
             └── ...                # Other scripts and resources
 └── README.md
 -----------
-##Getting Started
+Getting Started
 Prerequisites
 Python 3.8 or higher
 Node.js (for advanced JavaScript features)
 Modern web browser (Chrome, Firefox, Edge, etc.)
 -----
-##Installation
+Installation
 Clone the Repository
 bash:
 git clone https://github.com/atull31/pharm-ai.git
@@ -57,7 +57,7 @@ If your workflow uses npm packages (check for package.json):
 bash:
 npm install
 --------
-##Usage
+Usage
 Web Interface:
 Open index.html in your browser for the graphical interface.
 If app.py serves as a backend, run:
@@ -71,7 +71,7 @@ python your_script.py
 Customization:
 Modify or add scripts in the phrm-AI directory to extend functionality.
 ------
-##Contributing
+Contributing
 We welcome contributions from the community!
 To contribute:
 Fork the repository.
@@ -90,10 +90,10 @@ For more details, see CONTRIBUTING.md.
 License
 This project is currently unlicensed. For usage rights or to request a license, please contact the repository owner.
 ------
-##Contact
+Contact
 Repository Owner: atull31
 Issues: Please use the GitHub Issues tab for bug reports or feature requests.
 -----
-##Acknowledgements
+Acknowledgements
 Special thanks to all contributors and the open-source community for their support and inspiration.
 ----
