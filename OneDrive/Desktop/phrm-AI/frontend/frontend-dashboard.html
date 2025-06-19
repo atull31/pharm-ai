@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Health Records</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f6fa; margin: 0; }
+    .container { max-width: 700px; margin: 2rem auto; background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; }
+    .logout-btn { float: right; background: #d32f2f; color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; }
+    .logout-btn:hover { background: #a31515; }
+    form { margin-bottom: 2rem; }
+    label { display: block; margin-bottom: 0.5rem; }
+    input[type="file"], input[type="text"] { margin-bottom: 1rem; width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+    .records { margin-top: 2rem; }
+    .record { background: #f1f1f1; margin-bottom: 1rem; padding: 1rem; border-radius: 6px; }
+    .summary { color: #1976d2; margin-top: 0.5rem; }
+    .error, .success { margin-bottom: 1rem; text-align: center; }
+    .error { color: #d32f2f; }
+    .success { color: #388e3c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <button class="logout-btn" onclick="logout()">Logout</button>
+    <h2>Dashboard</h2>
+    <div class="profile-section" style="margin-bottom:2rem; background:#e3f2fd; padding:1rem 1.5rem; border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+      <div>
+        <strong>Logged in as:</strong> <span id="userEmail"></span>
+      </div>
+      <form id="changePwForm" style="display:inline-block;">
+        <input type="password" id="newPassword" placeholder="New Password" style="padding:0.4rem; border-radius:4px; border:1px solid #ccc;">
+        <button type="submit" style="padding:0.4rem 1rem; background:#1976d2; color:#fff; border:none; border-radius:4px; margin-left:0.5rem;" disabled>Change Password</button>
+        <span style="color:#888; font-size:0.9em; margin-left:0.5rem;">(Not implemented)</span>
+      </form>
+    </div>
+    <form id="uploadForm">
+      <label for="file">Upload Health File</label>
+      <input type="file" id="file" name="file" required>
+      <label for="tags">Tags (comma separated)</label>
+      <input type="text" id="tags" name="tags" placeholder="e.g. blood, report">
+      <label for="domain">Domain</label>
+      <input type="text" id="domain" name="domain" placeholder="e.g. diabetes">
+      <div class="error" id="uploadError"></div>
+      <div class="success" id="uploadSuccess"></div>
+      <button type="submit">Upload</button>
+    </form>
+    <div class="records">
+      <h3>Your Records</h3>
+      <form id="searchForm" style="margin-bottom:1.5rem;">
+        <input type="text" id="searchKeyword" placeholder="Search keyword" style="width: 40%; padding: 0.5rem;">
+        <input type="text" id="searchDomain" placeholder="Domain" style="width: 25%; padding: 0.5rem;">
+        <select id="searchSummary" style="padding: 0.5rem;">
+          <option value="">Summary?</option>
+          <option value="true">Has Summary</option>
+          <option value="false">No Summary</option>
+        </select>
+        <button type="submit" style="padding: 0.5rem 1rem;">Search</button>
+        <button type="button" id="clearSearch" style="padding: 0.5rem 1rem; margin-left: 0.5rem;">Clear</button>
+      </form>
+      <div id="recordsList">Loading...</div>
+    </div>
+    <div class="metrics-section" style="margin-top:2.5rem;">
+      <h3>Health Metrics Trend</h3>
+      <form id="metricsForm" style="margin-bottom:1rem;">
+        <label for="metricSelect">Select Metric:</label>
+        <select id="metricSelect" style="padding:0.5rem;">
+          <option value="">--Choose--</option>
+          <option value="glucose">Glucose</option>
+          <option value="hemoglobin">Hemoglobin</option>
+          <option value="crp">CRP</option>
+        </select>
+        <button type="submit" style="padding:0.5rem 1rem;">Show Trend</button>
+      </form>
+      <canvas id="metricsChart" width="600" height="300" style="background:#fff; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></canvas>
+      <div id="metricsError" class="error"></div>
+    </div>
+  </div>
+  <div id="recordModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.4); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:#fff; padding:2rem; border-radius:8px; max-width:500px; width:90%; position:relative;">
+      <button id="closeModal" style="position:absolute; top:10px; right:10px; background:#d32f2f; color:#fff; border:none; border-radius:50%; width:32px; height:32px; font-size:1.2rem; cursor:pointer;">&times;</button>
+      <div id="modalContent"></div>
+      <div id="modalActions" style="margin-top:1.5rem; text-align:right;"></div>
+      <div id="modalError" class="error"></div>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Redirect to login if not authenticated
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = 'frontend-login.html';
+    }
+
+    // Logout function
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = 'frontend-login.html';
+    }
+
+    // File upload
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('file');
+      const tagsInput = document.getElementById('tags').value;
+      const domainInput = document.getElementById('domain').value;
+      const uploadError = document.getElementById('uploadError');
+      const uploadSuccess = document.getElementById('uploadSuccess');
+      uploadError.textContent = '';
+      uploadSuccess.textContent = '';
+      if (!fileInput.files.length) {
+        uploadError.textContent = 'Please select a file.';
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('tags', tagsInput.split(',').map(t => t.trim()).filter(Boolean));
+      formData.append('domain', domainInput);
+      try {
+        const res = await fetch('/records/upload', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: formData
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          uploadError.textContent = data.detail || 'Upload failed';
+          return;
+        }
+        uploadSuccess.textContent = 'File uploaded successfully!';
+        fileInput.value = '';
+        document.getElementById('tags').value = '';
+        document.getElementById('domain').value = '';
+        loadRecords();
+      } catch (err) {
+        uploadError.textContent = 'Network error';
+      }
+    });
+
+    // Search and filter
+    document.getElementById('searchForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      loadRecords(true);
+    });
+    document.getElementById('clearSearch').addEventListener('click', function() {
+      document.getElementById('searchKeyword').value = '';
+      document.getElementById('searchDomain').value = '';
+      document.getElementById('searchSummary').value = '';
+      loadRecords();
+    });
+
+    // Update loadRecords to support search
+    async function loadRecords(useSearch = false) {
+      const recordsList = document.getElementById('recordsList');
+      recordsList.textContent = 'Loading...';
+      let url = '/records/list';
+      let options = { headers: { 'Authorization': 'Bearer ' + token } };
+      if (useSearch) {
+        const keyword = document.getElementById('searchKeyword').value.trim();
+        const domain = document.getElementById('searchDomain').value.trim();
+        const summaryVal = document.getElementById('searchSummary').value;
+        const params = new URLSearchParams();
+        if (keyword) params.append('keyword', keyword);
+        if (domain) params.append('domain', domain);
+        if (summaryVal) params.append('has_summary', summaryVal);
+        url = '/records/search?' + params.toString();
+      }
+      try {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+          recordsList.textContent = 'Failed to load records.';
+          return;
+        }
+        const data = await res.json();
+        const files = data.files || data.results || data;
+        if (!files.length) {
+          recordsList.textContent = 'No records found.';
+          return;
+        }
+        recordsList.innerHTML = '';
+        files.forEach(file => {
+          const div = document.createElement('div');
+          div.className = 'record';
+          div.innerHTML = `<strong>File:</strong> ${file.filename}<br>
+            <strong>Upload Date:</strong> ${new Date(file.upload_date).toLocaleString()}<br>
+            <strong>Domain:</strong> ${file.domain}<br>
+            <strong>Summary:</strong> <span class="summary">${file.summary || 'N/A'}</span>`;
+          div.style.cursor = 'pointer';
+          div.onclick = () => showRecordDetails(file);
+          recordsList.appendChild(div);
+        });
+      } catch (err) {
+        recordsList.textContent = 'Network error.';
+      }
+    }
+
+    // Modal logic
+    const recordModal = document.getElementById('recordModal');
+    const modalContent = document.getElementById('modalContent');
+    document.getElementById('closeModal').onclick = () => { recordModal.style.display = 'none'; };
+    window.onclick = function(event) { if (event.target === recordModal) recordModal.style.display = 'none'; };
+
+    // Show full record details in modal (with actions)
+    async function showRecordDetails(file) {
+      // If file has _id, fetch full info from /records/files, else use as is
+      if (file._id) {
+        try {
+          const res = await fetch('/records/files', { headers: { 'Authorization': 'Bearer ' + token } });
+          if (res.ok) {
+            const data = await res.json();
+            const found = (data.files || []).find(f => f._id === file._id);
+            if (found) file = found;
+          }
+        } catch {}
+      }
+      modalContent.innerHTML = `
+        <h3>Record Details</h3>
+        <strong>File:</strong> ${file.filename}<br>
+        <strong>Upload Date:</strong> ${new Date(file.upload_date).toLocaleString()}<br>
+        <strong>Domain:</strong> ${file.domain}<br>
+        <strong>Tags:</strong> ${(file.tags || []).join(', ')}<br>
+        <strong>File Type:</strong> ${file.file_type || ''}<br>
+        <strong>Summary:</strong><br><div style="background:#f5f5f5; padding:0.5rem; border-radius:4px; margin-bottom:1rem;">${file.summary || 'N/A'}</div>
+      `;
+      // Add actions: manual summarize and delete
+      const modalActions = document.getElementById('modalActions');
+      const modalError = document.getElementById('modalError');
+      modalActions.innerHTML = '';
+      modalError.textContent = '';
+      if (file._id) {
+        // Manual summarize button
+        const summarizeBtn = document.createElement('button');
+        summarizeBtn.textContent = 'Re-summarize';
+        summarizeBtn.style = 'margin-right:1rem; background:#1976d2; color:#fff; border:none; border-radius:4px; padding:0.5rem 1rem; cursor:pointer;';
+        summarizeBtn.onclick = async () => {
+          summarizeBtn.disabled = true;
+          summarizeBtn.textContent = 'Summarizing...';
+          modalError.textContent = '';
+          try {
+            const res = await fetch(`/records/summarize/${file._id}`, {
+              method: 'POST',
+              headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) {
+              const data = await res.json();
+              modalError.textContent = data.detail || 'Summarization failed.';
+              summarizeBtn.disabled = false;
+              summarizeBtn.textContent = 'Re-summarize';
+              return;
+            }
+            const data = await res.json();
+            file.summary = data.summary;
+            showRecordDetails(file); // Refresh modal
+          } catch (err) {
+            modalError.textContent = 'Network error.';
+            summarizeBtn.disabled = false;
+            summarizeBtn.textContent = 'Re-summarize';
+          }
+        };
+        modalActions.appendChild(summarizeBtn);
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete Record';
+        deleteBtn.style = 'background:#d32f2f; color:#fff; border:none; border-radius:4px; padding:0.5rem 1rem; cursor:pointer;';
+        deleteBtn.onclick = async () => {
+          if (!confirm('Are you sure you want to delete this record?')) return;
+          deleteBtn.disabled = true;
+          deleteBtn.textContent = 'Deleting...';
+          modalError.textContent = '';
+          try {
+            const res = await fetch(`/records/${file._id}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) {
+              const data = await res.json();
+              modalError.textContent = data.detail || 'Delete failed.';
+              deleteBtn.disabled = false;
+              deleteBtn.textContent = 'Delete Record';
+              return;
+            }
+            recordModal.style.display = 'none';
+            loadRecords();
+          } catch (err) {
+            modalError.textContent = 'Network error.';
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = 'Delete Record';
+          }
+        };
+        modalActions.appendChild(deleteBtn);
+      }
+      recordModal.style.display = 'flex';
+    }
+
+    // Initial load
+    loadRecords();
+
+    // Metrics trend visualization
+    const metricsForm = document.getElementById('metricsForm');
+    const metricSelect = document.getElementById('metricSelect');
+    const metricsChartCtx = document.getElementById('metricsChart').getContext('2d');
+    const metricsError = document.getElementById('metricsError');
+    let chartInstance = null;
+
+    metricsForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      metricsError.textContent = '';
+      const metric = metricSelect.value;
+      if (!metric) {
+        metricsError.textContent = 'Please select a metric.';
+        return;
+      }
+      try {
+        const res = await fetch(`/records/metrics/trend?metric=${encodeURIComponent(metric)}`, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) {
+          metricsError.textContent = 'Failed to fetch metric trend.';
+          return;
+        }
+        const data = await res.json();
+        if (!data.values || !data.values.length) {
+          metricsError.textContent = 'No data found for this metric.';
+          if (chartInstance) { chartInstance.destroy(); }
+          return;
+        }
+        const labels = data.values.map(v => v.date);
+        const values = data.values.map(v => v.value);
+        if (chartInstance) { chartInstance.destroy(); }
+        chartInstance = new Chart(metricsChartCtx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: `${data.metric} trend`,
+              data: values,
+              borderColor: '#1976d2',
+              backgroundColor: 'rgba(25, 118, 210, 0.1)',
+              fill: true,
+              tension: 0.2
+            }]
+          },
+          options: {
+            responsive: false,
+            plugins: { legend: { display: true } },
+            scales: { x: { title: { display: true, text: 'Date' } }, y: { title: { display: true, text: 'Value' } } }
+          }
+        });
+      } catch (err) {
+        metricsError.textContent = 'Network error.';
+        if (chartInstance) { chartInstance.destroy(); }
+      }
+    });
+
+    // Profile/account info
+    function parseJwt (token) {
+      try {
+        return JSON.parse(atob(token.split('.')[1]));
+      } catch (e) { return {}; }
+    }
+    const user = parseJwt(token);
+    document.getElementById('userEmail').textContent = user.email || '(unknown)';
+  </script>
+</body>
+</html> 
